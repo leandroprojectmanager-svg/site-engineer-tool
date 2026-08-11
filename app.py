@@ -7273,13 +7273,266 @@ elif pagina == "Daily Report":
             "Existing Daily Reports"
         )
 
-        st.dataframe(
-            pd.DataFrame(
-                daily_summary_rows
-            ),
-            use_container_width=True,
-            hide_index=True,
+                # ========================================================
+        # EXISTING DAILY REPORTS TABLE WITH DELETE BUTTON
+        # ========================================================
+
+        header_cols = st.columns(
+            [2.2, 1.2, 1.1, 0.8, 0.8, 0.9, 1.2, 0.6]
         )
+
+        headers = [
+            "Project",
+            "Date",
+            "Status",
+            "Manpower",
+            "Plant",
+            "Activities",
+            "Last Updated",
+            "Delete",
+        ]
+
+        for col, header in zip(
+            header_cols,
+            headers,
+        ):
+            col.markdown(
+                f"**{header}**"
+            )
+
+        st.divider()
+
+        for key in existing_daily_keys:
+
+            record = (
+                st.session_state
+                .daily_reports[key]
+            )
+
+            row_cols = st.columns(
+                [2.2, 1.2, 1.1, 0.8, 0.8, 0.9, 1.2, 0.6]
+            )
+
+            row_cols[0].write(
+                record.get(
+                    "Project",
+                    "",
+                )
+            )
+
+            row_cols[1].write(
+                format_date_for_display(
+                    record.get(
+                        "Date",
+                        "",
+                    )
+                )
+            )
+
+            row_cols[2].write(
+                record.get(
+                    "Status",
+                    "Draft",
+                )
+            )
+
+            row_cols[3].write(
+                calculate_total_manpower(
+                    key
+                )
+            )
+
+            row_cols[4].write(
+                calculate_total_equipment(
+                    key
+                )
+            )
+
+            row_cols[5].write(
+                len(
+                    daily_items_for_key(
+                        st.session_state.daily_activities,
+                        key,
+                    )
+                )
+            )
+
+            row_cols[6].write(
+                format_date_for_display(
+                    record.get(
+                        "Last Updated",
+                        "",
+                    )
+                )
+            )
+
+            if row_cols[7].button(
+                "🗑️",
+                key=(
+                    f"table_delete_daily_"
+                    f"{widget_suffix(key)}"
+                ),
+                help="Delete Daily Report",
+            ):
+                st.session_state[
+                    "pending_delete_daily"
+                ] = key
+
+            if (
+                st.session_state.get(
+                    "pending_delete_daily"
+                )
+                == key
+            ):
+
+                st.warning(
+                    "⚠️ Permanently delete "
+                    f"{record.get('Project', '')} | "
+                    f"{format_date_for_display(record.get('Date', ''))}?"
+                )
+
+                confirm_col, cancel_col = (
+                    st.columns(2)
+                )
+
+                if confirm_col.button(
+                    "✅ Yes, Delete Permanently",
+                    key=(
+                        f"confirm_table_delete_"
+                        f"{widget_suffix(key)}"
+                    ),
+                    type="primary",
+                ):
+
+                    try:
+
+                        supabase = (
+                            get_supabase_client()
+                        )
+
+                        photo_response = (
+                            supabase
+                            .table("daily_photos")
+                            .select("storage_path")
+                            .eq(
+                                "report_key",
+                                key,
+                            )
+                            .execute()
+                        )
+
+                        storage_paths = [
+                            row.get(
+                                "storage_path"
+                            )
+                            for row
+                            in (
+                                photo_response.data
+                                or []
+                            )
+                            if row.get(
+                                "storage_path"
+                            )
+                        ]
+
+                        if storage_paths:
+
+                            try:
+
+                                (
+                                    supabase.storage
+                                    .from_(
+                                        SUPABASE_PHOTO_BUCKET
+                                    )
+                                    .remove(
+                                        storage_paths
+                                    )
+                                )
+
+                            except Exception:
+
+                                pass
+
+                        (
+                            supabase
+                            .table(
+                                "daily_reports"
+                            )
+                            .delete()
+                            .eq(
+                                "report_key",
+                                key,
+                            )
+                            .execute()
+                        )
+
+                        st.session_state.daily_reports.pop(
+                            key,
+                            None,
+                        )
+
+                        daily_collections = [
+                            "daily_manpower",
+                            "daily_equipment",
+                            "daily_activities",
+                            "daily_deliveries",
+                            "daily_inspections",
+                            "daily_issues",
+                            "daily_photos",
+                        ]
+
+                        for collection_name in (
+                            daily_collections
+                        ):
+
+                            st.session_state[
+                                collection_name
+                            ] = [
+                                item
+                                for item
+                                in st.session_state[
+                                    collection_name
+                                ]
+                                if item.get(
+                                    "Daily Report Key"
+                                )
+                                != key
+                            ]
+
+                        st.session_state.pop(
+                            "pending_delete_daily",
+                            None,
+                        )
+
+                        st.success(
+                            "Daily Report permanently deleted."
+                        )
+
+                        st.rerun()
+
+                    except Exception as exc:
+
+                        st.error(
+                            "Could not delete the Daily Report. "
+                            f"Error: {exc}"
+                        )
+
+                if cancel_col.button(
+                    "Cancel",
+                    key=(
+                        f"cancel_table_delete_"
+                        f"{widget_suffix(key)}"
+                    ),
+                ):
+
+                    st.session_state.pop(
+                        "pending_delete_daily",
+                        None,
+                    )
+
+                    st.rerun()
+
+            st.divider()
 
 
         selected_daily_key = (
@@ -7591,6 +7844,44 @@ elif pagina == "Daily Report":
                 ),
             )
         )
+
+            # ========================================================
+    # TOTAL WORKING HOURS
+    # ========================================================
+
+    start_minutes = (
+        working_start.hour * 60
+        + working_start.minute
+    )
+
+    finish_minutes = (
+        working_finish.hour * 60
+        + working_finish.minute
+    )
+
+    if finish_minutes < start_minutes:
+        finish_minutes += 24 * 60
+
+    total_worked_minutes = (
+        finish_minutes
+        - start_minutes
+    )
+
+    total_worked_hours = (
+        total_worked_minutes // 60
+    )
+
+    total_worked_remaining_minutes = (
+        total_worked_minutes % 60
+    )
+
+    st.metric(
+        "Total Hours Worked",
+        (
+            f"{total_worked_hours}h "
+            f"{total_worked_remaining_minutes:02d}min"
+        ),
+    )
 
 
     if (
