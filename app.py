@@ -7341,24 +7341,36 @@ elif pagina == "Daily Report":
                     )
                 )
 
-                if st.button(
+                button_open, button_delete = st.columns(
+                    [1, 1]
+                )
+
+                if button_open.button(
+                    "📂 Open",
+                    key=(
+                        f"card_open_daily_"
+                        f"{widget_suffix(key)}"
+                    ),
+                    use_container_width=True,
+                ):
+                    st.session_state[
+                        "selected_daily_report_key"
+                    ] = key
+
+                    st.rerun()
+
+                if button_delete.button(
                     "🗑️ Delete",
                     key=(
                         f"card_delete_daily_"
                         f"{widget_suffix(key)}"
                     ),
+                    use_container_width=True,
                 ):
-
                     st.session_state[
                         "pending_delete_daily"
-                    ] = key
+                    ] = key          
 
-                if (
-                    st.session_state.get(
-                        "pending_delete_daily"
-                    )
-                    == key
-                ):
 
                     st.warning(
                         (
@@ -7538,6 +7550,7 @@ elif pagina == "Daily Report":
                     f" | "
                     f"{st.session_state.daily_reports[key].get('Status', 'Draft')}"
                 ),
+                key="selected_daily_report_key",
             )
         )
 
