@@ -18,7 +18,7 @@ from supabase import create_client
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, A3, landscape
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
@@ -827,6 +827,151 @@ def load_daily_reports_from_supabase():
         loaded_photos.append(photo)
 
     st.session_state.daily_photos = loaded_photos
+
+def load_block_progress_from_supabase(
+    block_key,
+):
+
+    supabase = get_supabase_client()
+
+    block_response = (
+        supabase
+        .table(
+            "block_progress_blocks"
+        )
+        .select(
+            "block_key,project,block_name"
+        )
+        .eq(
+            "block_key",
+            block_key,
+        )
+        .execute()
+    )
+
+    activity_response = (
+        supabase
+        .table(
+            "block_progress_activities"
+        )
+        .select(
+            (
+                "activity_order,"
+                "activity_name,"
+                "status,"
+                "started_date,"
+                "completed_date,"
+                "notes"
+            )
+        )
+        .eq(
+            "block_key",
+            block_key,
+        )
+        .order(
+            "activity_order"
+        )
+        .execute()
+    )
+
+    block_rows = (
+        block_response.data or []
+    )
+
+    activity_rows = (
+        activity_response.data or []
+    )
+
+    if not block_rows:
+
+        return None
+
+    return {
+        "block": block_rows[0],
+        "activities": activity_rows,
+    }
+def list_block_progress_blocks_from_supabase():
+    
+    supabase = get_supabase_client()
+
+    response = (
+        supabase
+        .table(
+            "block_progress_blocks"
+        )
+        .select(
+            (
+                "block_key,"
+                "project,"
+                "block_name,"
+                "updated_at"
+            )
+        )
+        .order(
+            "project"
+        )
+        .order(
+            "block_name"
+        )
+        .execute()
+    )
+
+    return response.data or []
+
+def load_site_progress_board_data():
+
+    supabase = get_supabase_client()
+
+    blocks_response = (
+        supabase
+        .table(
+            "block_progress_blocks"
+        )
+        .select(
+            (
+                "block_key,"
+                "project,"
+                "block_name"
+            )
+        )
+        .order(
+            "project"
+        )
+        .order(
+            "block_name"
+        )
+        .execute()
+    )
+
+    activities_response = (
+        supabase
+        .table(
+            "block_progress_activities"
+        )
+        .select(
+            (
+                "block_key,"
+                "activity_order,"
+                "activity_name,"
+                "status"
+            )
+        )
+        .order(
+            "activity_order"
+        )
+        .execute()
+    )
+
+    return {
+        "blocks": (
+            blocks_response.data
+            or []
+        ),
+        "activities": (
+            activities_response.data
+            or []
+        ),
+    }
 
 
 def save_daily_report_to_supabase(report_key, report_record):
@@ -2681,6 +2826,2090 @@ def generate_daily_pdf(
 
     return output.getvalue()
 
+def build_block_progress_pdf(
+    project,
+    block_name,
+    activities,
+):
+
+    buffer = BytesIO()
+
+    navy = colors.HexColor(
+        "#08284A"
+    )
+
+    gold = colors.HexColor(
+        "#D6B21F"
+    )
+
+    dark_header = colors.HexColor(
+        "#364352"
+    )
+
+    light_gray = colors.HexColor(
+        "#F4F6F8"
+    )
+
+    grid_gray = colors.HexColor(
+        "#D7DDE3"
+    )
+
+    complete_color = colors.HexColor(
+        "#D9EED9"
+    )
+
+    in_progress_color = colors.HexColor(
+        "#FFF1C7"
+    )
+
+    not_started_color = colors.HexColor(
+        "#EEF1F4"
+    )
+
+    na_color = colors.HexColor(
+        "#E4E7EA"
+    )
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A3),
+        rightMargin=5 * mm,
+        leftMargin=5 * mm,
+        topMargin=5 * mm,
+        bottomMargin=5 * mm,
+        title="Block Progress Report",
+        author="Site Engineer Tool",
+    )
+
+    styles = getSampleStyleSheet()
+
+    normal_style = ParagraphStyle(
+        "BlockProgressNormal",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=7,
+        leading=8,
+        textColor=colors.HexColor(
+            "#263746"
+        ),
+    )
+
+    small_style = ParagraphStyle(
+        "BlockProgressSmall",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=6.2,
+        leading=7,
+        textColor=colors.HexColor(
+            "#263746"
+        ),
+    )
+
+    section_style = ParagraphStyle(
+        "BlockProgressSection",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=7.5,
+        leading=8,
+        textColor=colors.white,
+    )
+
+    center_style = ParagraphStyle(
+        "BlockProgressCenter",
+        parent=normal_style,
+        alignment=TA_CENTER,
+    )
+
+    story = []
+
+    # ========================================================
+    # HEADER
+    # ========================================================
+
+    header_left = Table(
+        [
+            [
+                Paragraph(
+                    (
+                        "<font size='22'>"
+                        "Glenveagh"
+                        "</font>"
+                    ),
+                    ParagraphStyle(
+                        "GlenveaghHeader",
+                        parent=styles["Normal"],
+                        fontName="Helvetica",
+                        fontSize=22,
+                        leading=21,
+                        textColor=colors.white,
+                    ),
+                )
+            ],
+            [
+                Paragraph(
+                    "Home of the new.",
+                    ParagraphStyle(
+                        "GlenveaghTagline",
+                        parent=styles["Normal"],
+                        fontName="Helvetica-Bold",
+                        fontSize=6.5,
+                        leading=7,
+                        textColor=gold,
+                    ),
+                )
+            ],
+        ],
+        colWidths=[
+            120 * mm
+        ],
+    )
+
+    header_left.setStyle(
+        TableStyle(
+            [
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, -1),
+                    navy,
+                ),
+                (
+                    "LEFTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3 * mm,
+                ),
+                (
+                    "RIGHTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    0,
+                ),
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, 0),
+                    3,
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, 0),
+                    0,
+                ),
+                (
+                    "TOPPADDING",
+                    (0, 1),
+                    (-1, 1),
+                    0,
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 1),
+                    (-1, 1),
+                    3,
+                ),
+            ]
+        )
+    )
+
+    header_right = Table(
+        [
+            [
+                Paragraph(
+                    "BLOCK PROGRESS REPORT",
+                    ParagraphStyle(
+                        "BlockReportTitle",
+                        parent=styles["Normal"],
+                        fontName="Helvetica-Bold",
+                        fontSize=16,
+                        leading=17,
+                        alignment=2,
+                        textColor=colors.white,
+                    ),
+                )
+            ],
+            [
+                Paragraph(
+                    "Construction & Site Engineering Record",
+                    ParagraphStyle(
+                        "BlockReportSubtitle",
+                        parent=styles["Normal"],
+                        fontName="Helvetica",
+                        fontSize=6.5,
+                        leading=7,
+                        alignment=2,
+                        textColor=colors.white,
+                    ),
+                )
+            ],
+        ],
+        colWidths=[
+            275 * mm
+        ],
+    )
+
+    header_right.setStyle(
+        TableStyle(
+            [
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, -1),
+                    navy,
+                ),
+                (
+                    "RIGHTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3 * mm,
+                ),
+                (
+                    "LEFTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    0,
+                ),
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, 0),
+                    3,
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, 0),
+                    0,
+                ),
+                (
+                    "TOPPADDING",
+                    (0, 1),
+                    (-1, 1),
+                    0,
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 1),
+                    (-1, 1),
+                    3,
+                ),
+            ]
+        )
+    )
+
+    header_table = Table(
+        [
+            [
+                header_left,
+                header_right,
+            ]
+        ],
+        colWidths=[
+            120 * mm,
+            275 * mm,
+        ],
+    )
+
+    header_table.setStyle(
+        TableStyle(
+            [
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, -1),
+                    navy,
+                ),
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "MIDDLE",
+                ),
+                (
+                    "LEFTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    0,
+                ),
+                (
+                    "RIGHTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    0,
+                ),
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    0,
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    0,
+                ),
+            ]
+        )
+    )
+
+    story.append(
+        header_table
+    )
+
+    gold_line = Table(
+        [[""]],
+        colWidths=[
+            395 * mm
+        ],
+        rowHeights=[
+            1.2 * mm
+        ],
+    )
+
+    gold_line.setStyle(
+        TableStyle(
+            [
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, -1),
+                    gold,
+                ),
+                (
+                    "LEFTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    0,
+                ),
+                (
+                    "RIGHTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    0,
+                ),
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    0,
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    0,
+                ),
+            ]
+        )
+    )
+
+    story.append(
+        gold_line
+    )
+
+    story.append(
+        Spacer(
+            1,
+            3 * mm,
+        )
+    )
+
+    # ========================================================
+    # CALCULATIONS
+    # ========================================================
+
+    total_services = len(
+        activities
+    )
+
+    total_complete = sum(
+        1
+        for item in activities
+        if item.get(
+            "status"
+        ) == "Complete"
+    )
+
+    total_in_progress = sum(
+        1
+        for item in activities
+        if item.get(
+            "status"
+        ) == "In Progress"
+    )
+
+    total_not_started = sum(
+        1
+        for item in activities
+        if item.get(
+            "status"
+        ) == "Not Started"
+    )
+
+    total_na = sum(
+        1
+        for item in activities
+        if item.get(
+            "status"
+        ) == "N/A"
+    )
+
+    applicable_services = (
+        total_services
+        - total_na
+    )
+
+    if applicable_services > 0:
+
+        progress_percent = round(
+            (
+                total_complete
+                / applicable_services
+            )
+            * 100
+        )
+
+    else:
+
+        progress_percent = 0
+
+    last_updated = (
+        date.today().strftime(
+            "%d/%m/%Y"
+        )
+    )
+
+    # ========================================================
+    # PROJECT INFORMATION
+    # ========================================================
+
+    info_data = [
+        [
+            "Project / Site",
+            project,
+            "Block",
+            block_name,
+            "Last Updated",
+            last_updated,
+            "Progress",
+            (
+                f"{total_complete} / "
+                f"{applicable_services} - "
+                f"{progress_percent}%"
+            ),
+        ]
+    ]
+
+    info_table = Table(
+        info_data,
+        colWidths=[
+            28 * mm,
+            45 * mm,
+            18 * mm,
+            35 * mm,
+            28 * mm,
+            42 * mm,
+            22 * mm,
+            52 * mm,
+        ],
+        hAlign="CENTER",
+    )
+
+    info_table.setStyle(
+        TableStyle(
+            [
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (0, 0),
+                    not_started_color,
+                ),
+                (
+                    "BACKGROUND",
+                    (2, 0),
+                    (2, 0),
+                    not_started_color,
+                ),
+                (
+                    "BACKGROUND",
+                    (4, 0),
+                    (4, 0),
+                    not_started_color,
+                ),
+                (
+                    "BACKGROUND",
+                    (6, 0),
+                    (6, 0),
+                    not_started_color,
+                ),
+                (
+                    "FONTNAME",
+                    (0, 0),
+                    (0, 0),
+                    "Helvetica-Bold",
+                ),
+                (
+                    "FONTNAME",
+                    (2, 0),
+                    (2, 0),
+                    "Helvetica-Bold",
+                ),
+                (
+                    "FONTNAME",
+                    (4, 0),
+                    (4, 0),
+                    "Helvetica-Bold",
+                ),
+                (
+                    "FONTNAME",
+                    (6, 0),
+                    (6, 0),
+                    "Helvetica-Bold",
+                ),
+                (
+                    "FONTNAME",
+                    (7, 0),
+                    (7, 0),
+                    "Helvetica-Bold",
+                ),
+                (
+                    "FONTSIZE",
+                    (0, 0),
+                    (-1, -1),
+                    6.5,
+                ),
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.35,
+                    grid_gray,
+                ),
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "MIDDLE",
+                ),
+                (
+                    "LEFTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    2 * mm,
+                ),
+                (
+                    "RIGHTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    2 * mm,
+                ),
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    4,
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    4,
+                ),
+            ]
+        )
+    )
+
+    story.append(
+        info_table
+    )
+
+    story.append(
+        Spacer(
+            1,
+            2.5 * mm,
+        )
+    )
+
+    # ========================================================
+    # SUMMARY
+    # ========================================================
+
+    summary_data = [
+        [
+            Paragraph(
+                (
+                    f"<b>{total_services}</b>"
+                    "<br/>"
+                    "<font size='5.5'>"
+                    "Total Services"
+                    "</font>"
+                ),
+                center_style,
+            ),
+            Paragraph(
+                (
+                    f"<b>{total_complete}</b>"
+                    "<br/>"
+                    "<font size='5.5'>"
+                    "Complete"
+                    "</font>"
+                ),
+                center_style,
+            ),
+            Paragraph(
+                (
+                    f"<b>{total_in_progress}</b>"
+                    "<br/>"
+                    "<font size='5.5'>"
+                    "In Progress"
+                    "</font>"
+                ),
+                center_style,
+            ),
+            Paragraph(
+                (
+                    f"<b>{total_not_started}</b>"
+                    "<br/>"
+                    "<font size='5.5'>"
+                    "Not Started"
+                    "</font>"
+                ),
+                center_style,
+            ),
+            Paragraph(
+                (
+                    f"<b>{progress_percent}%</b>"
+                    "<br/>"
+                    "<font size='5.5'>"
+                    "Overall Progress"
+                    "</font>"
+                ),
+                center_style,
+            ),
+        ]
+    ]
+
+    summary_table = Table(
+        summary_data,
+        colWidths=[
+            79 * mm,
+            79 * mm,
+            79 * mm,
+            79 * mm,
+            79 * mm,
+        ],
+    )
+
+    summary_table.setStyle(
+        TableStyle(
+            [
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, -1),
+                    light_gray,
+                ),
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.35,
+                    grid_gray,
+                ),
+                (
+                    "ALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "CENTER",
+                ),
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "MIDDLE",
+                ),
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    4,
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    4,
+                ),
+            ]
+        )
+    )
+
+    story.append(
+        summary_table
+    )
+
+    story.append(
+        Spacer(
+            1,
+            2.5 * mm,
+        )
+    )
+
+    # ========================================================
+    # PROGRESS BAR
+    # ========================================================
+
+    progress_width = (
+        395
+        * progress_percent
+        / 100
+    )
+
+    remaining_width = (
+        395
+        - progress_width
+    )
+
+    if progress_percent <= 0:
+
+        progress_bar_data = [
+            [""]
+        ]
+
+        progress_bar_widths = [
+            395 * mm
+        ]
+
+    elif progress_percent >= 100:
+
+        progress_bar_data = [
+            [""]
+        ]
+
+        progress_bar_widths = [
+            395 * mm
+        ]
+
+    else:
+
+        progress_bar_data = [
+            [
+                "",
+                "",
+            ]
+        ]
+
+        progress_bar_widths = [
+            progress_width * mm,
+            remaining_width * mm,
+        ]
+
+    progress_bar = Table(
+        progress_bar_data,
+        colWidths=progress_bar_widths,
+        rowHeights=[
+            5.5 * mm
+        ],
+    )
+
+    if progress_percent <= 0:
+
+        progress_bar.setStyle(
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, -1),
+                        not_started_color,
+                    ),
+                    (
+                        "BOX",
+                        (0, 0),
+                        (-1, -1),
+                        0.3,
+                        grid_gray,
+                    ),
+                ]
+            )
+        )
+
+    elif progress_percent >= 100:
+
+        progress_bar.setStyle(
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, -1),
+                        navy,
+                    ),
+                ]
+            )
+        )
+
+    else:
+
+        progress_bar.setStyle(
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (0, 0),
+                        navy,
+                    ),
+                    (
+                        "BACKGROUND",
+                        (1, 0),
+                        (1, 0),
+                        not_started_color,
+                    ),
+                    (
+                        "BOX",
+                        (0, 0),
+                        (-1, -1),
+                        0.3,
+                        grid_gray,
+                    ),
+                ]
+            )
+        )
+
+    story.append(
+        progress_bar
+    )
+
+    story.append(
+        Spacer(
+            1,
+            3.5 * mm,
+        )
+    )
+
+    # ========================================================
+    # MAIN TABLE
+    # ========================================================
+
+    main_table_data = []
+
+    main_table_data.append(
+        [
+            "No.",
+            "Activity",
+            "Status",
+            "Started",
+            "Completed",
+            "Duration",
+            "Notes",
+        ]
+    )
+
+    section_map = {
+        1: "FOUNDATION",
+        6: "BLOCKWORK & DRAINAGE",
+        16: "RADON & INSULATION",
+        20: "FLOOR SLAB",
+    }
+
+    section_rows = []
+
+    status_cells = []
+
+    for item in activities:
+
+        activity_order = int(
+            item.get(
+                "activity_order",
+                0,
+            )
+        )
+
+        if activity_order in section_map:
+
+            section_rows.append(
+                len(
+                    main_table_data
+                )
+            )
+
+            main_table_data.append(
+                [
+                    section_map[
+                        activity_order
+                    ],
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                ]
+            )
+
+        status = item.get(
+            "status",
+            "Not Started",
+        )
+
+        started_text = (
+            item.get(
+                "started"
+            )
+            or "-"
+        )
+
+        completed_text = (
+            item.get(
+                "completed"
+            )
+            or "-"
+        )
+
+        notes_text = (
+            item.get(
+                "notes"
+            )
+            or "-"
+        )
+
+        duration_text = "-"
+
+        if (
+            item.get(
+                "started"
+            )
+            and item.get(
+                "completed"
+            )
+        ):
+
+            try:
+
+                start_value = (
+                    datetime.strptime(
+                        item.get(
+                            "started"
+                        ),
+                        "%d/%m/%Y",
+                    ).date()
+                )
+
+                complete_value = (
+                    datetime.strptime(
+                        item.get(
+                            "completed"
+                        ),
+                        "%d/%m/%Y",
+                    ).date()
+                )
+
+                duration_days = (
+                    complete_value
+                    - start_value
+                ).days
+
+                if duration_days == 1:
+
+                    duration_text = (
+                        "1 day"
+                    )
+
+                else:
+
+                    duration_text = (
+                        f"{duration_days} days"
+                    )
+
+            except Exception:
+
+                duration_text = "-"
+
+        elif (
+            item.get(
+                "started"
+            )
+            and status
+            == "In Progress"
+        ):
+
+            try:
+
+                start_value = (
+                    datetime.strptime(
+                        item.get(
+                            "started"
+                        ),
+                        "%d/%m/%Y",
+                    ).date()
+                )
+
+                duration_days = (
+                    date.today()
+                    - start_value
+                ).days
+
+                if duration_days == 1:
+
+                    duration_text = (
+                        "1 day*"
+                    )
+
+                else:
+
+                    duration_text = (
+                        f"{duration_days} days*"
+                    )
+
+            except Exception:
+
+                duration_text = "-"
+
+        row_number = len(
+            main_table_data
+        )
+
+        status_cells.append(
+            (
+                row_number,
+                status,
+            )
+        )
+
+        main_table_data.append(
+            [
+                f"{activity_order:02d}",
+                item.get(
+                    "activity",
+                    "",
+                ),
+                status,
+                started_text,
+                completed_text,
+                duration_text,
+                notes_text,
+            ]
+        )
+
+    main_table = Table(
+        main_table_data,
+        colWidths=[
+            12 * mm,
+            120 * mm,
+            36 * mm,
+            34 * mm,
+            34 * mm,
+            30 * mm,
+            129 * mm,
+        ],
+        repeatRows=1,
+    )
+
+    table_style_commands = [
+        (
+            "BACKGROUND",
+            (0, 0),
+            (-1, 0),
+            dark_header,
+        ),
+        (
+            "TEXTCOLOR",
+            (0, 0),
+            (-1, 0),
+            colors.white,
+        ),
+        (
+            "FONTNAME",
+            (0, 0),
+            (-1, 0),
+            "Helvetica-Bold",
+        ),
+        (
+            "FONTSIZE",
+            (0, 0),
+            (-1, -1),
+            6.2,
+        ),
+        (
+            "GRID",
+            (0, 0),
+            (-1, -1),
+            0.25,
+            grid_gray,
+        ),
+        (
+            "VALIGN",
+            (0, 0),
+            (-1, -1),
+            "MIDDLE",
+        ),
+        (
+            "ALIGN",
+            (0, 0),
+            (0, -1),
+            "CENTER",
+        ),
+        (
+            "ALIGN",
+            (2, 0),
+            (5, -1),
+            "CENTER",
+        ),
+        (
+            "LEFTPADDING",
+            (0, 0),
+            (-1, -1),
+            1.5 * mm,
+        ),
+        (
+            "RIGHTPADDING",
+            (0, 0),
+            (-1, -1),
+            1.5 * mm,
+        ),
+        (
+            "TOPPADDING",
+            (0, 0),
+            (-1, -1),
+            2.4,
+        ),
+        (
+            "BOTTOMPADDING",
+            (0, 0),
+            (-1, -1),
+            2.4,
+        ),
+    ]
+
+    for section_row in section_rows:
+
+        table_style_commands.extend(
+            [
+                (
+                    "SPAN",
+                    (0, section_row),
+                    (-1, section_row),
+                ),
+                (
+                    "BACKGROUND",
+                    (0, section_row),
+                    (-1, section_row),
+                    navy,
+                ),
+                (
+                    "TEXTCOLOR",
+                    (0, section_row),
+                    (-1, section_row),
+                    colors.white,
+                ),
+                (
+                    "FONTNAME",
+                    (0, section_row),
+                    (-1, section_row),
+                    "Helvetica-Bold",
+                ),
+                (
+                    "ALIGN",
+                    (0, section_row),
+                    (-1, section_row),
+                    "LEFT",
+                ),
+                (
+                    "TOPPADDING",
+                    (0, section_row),
+                    (-1, section_row),
+                    3,
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, section_row),
+                    (-1, section_row),
+                    3,
+                ),
+            ]
+        )
+
+    for row_number, status in status_cells:
+
+        if status == "Complete":
+
+            status_color = (
+                complete_color
+            )
+
+        elif status == "In Progress":
+
+            status_color = (
+                in_progress_color
+            )
+
+        elif status == "N/A":
+
+            status_color = (
+                na_color
+            )
+
+        else:
+
+            status_color = (
+                not_started_color
+            )
+
+        table_style_commands.extend(
+            [
+                (
+                    "BACKGROUND",
+                    (2, row_number),
+                    (2, row_number),
+                    status_color,
+                ),
+                (
+                    "FONTNAME",
+                    (2, row_number),
+                    (2, row_number),
+                    "Helvetica-Bold",
+                ),
+            ]
+        )
+
+    main_table.setStyle(
+        TableStyle(
+            table_style_commands
+        )
+    )
+
+    story.append(
+        main_table
+    )
+
+    story.append(
+        Spacer(
+            1,
+            3 * mm,
+        )
+    )
+
+    # ========================================================
+    # LEGEND
+    # ========================================================
+
+    legend_data = [
+        [
+            "Status:",
+            "Complete",
+            "In Progress",
+            "Not Started",
+            "N/A",
+            (
+                "* Duration for In Progress items "
+                "is calculated up to the report date."
+            ),
+        ]
+    ]
+
+    legend_table = Table(
+        legend_data,
+        colWidths=[
+            22 * mm,
+            32 * mm,
+            32 * mm,
+            35 * mm,
+            20 * mm,
+            254 * mm,
+        ],
+    )
+
+    legend_table.setStyle(
+        TableStyle(
+            [
+                (
+                    "BACKGROUND",
+                    (1, 0),
+                    (1, 0),
+                    complete_color,
+                ),
+                (
+                    "BACKGROUND",
+                    (2, 0),
+                    (2, 0),
+                    in_progress_color,
+                ),
+                (
+                    "BACKGROUND",
+                    (3, 0),
+                    (3, 0),
+                    not_started_color,
+                ),
+                (
+                    "BACKGROUND",
+                    (4, 0),
+                    (4, 0),
+                    na_color,
+                ),
+                (
+                    "FONTNAME",
+                    (0, 0),
+                    (4, 0),
+                    "Helvetica-Bold",
+                ),
+                (
+                    "FONTSIZE",
+                    (0, 0),
+                    (-1, -1),
+                    6,
+                ),
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.25,
+                    grid_gray,
+                ),
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "MIDDLE",
+                ),
+                (
+                    "LEFTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    1.5 * mm,
+                ),
+                (
+                    "RIGHTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    1.5 * mm,
+                ),
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3,
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3,
+                ),
+            ]
+        )
+    )
+
+    story.append(
+        legend_table
+    )
+
+    doc.build(
+        story
+    )
+
+    buffer.seek(
+        0
+    )
+
+    return buffer.getvalue()
+
+def build_site_progress_board_pdf(
+    project,
+    blocks,
+    activities,
+):
+
+    buffer = BytesIO()
+
+    navy = colors.HexColor(
+        "#08284A"
+    )
+
+    gold = colors.HexColor(
+        "#D6B21F"
+    )
+
+    complete_color = colors.HexColor(
+        "#D9EED9"
+    )
+
+    in_progress_color = colors.HexColor(
+        "#FFF1C7"
+    )
+
+    not_started_color = colors.HexColor(
+        "#EEF1F4"
+    )
+
+    na_color = colors.HexColor(
+        "#E4E7EA"
+    )
+
+    grid_gray = colors.HexColor(
+        "#D7DDE3"
+    )
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A3),
+        rightMargin=5 * mm,
+        leftMargin=5 * mm,
+        topMargin=5 * mm,
+        bottomMargin=5 * mm,
+        title="Site Progress Board",
+        author="Site Engineer Tool",
+    )
+
+    styles = getSampleStyleSheet()
+
+    header_style = ParagraphStyle(
+        "SiteBoardHeader",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=6.5,
+        leading=7,
+        textColor=colors.white,
+        alignment=TA_CENTER,
+    )
+
+    activity_style = ParagraphStyle(
+        "SiteBoardActivity",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=6,
+        leading=7,
+    )
+
+    status_style = ParagraphStyle(
+        "SiteBoardStatus",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=5.5,
+        leading=6,
+        alignment=TA_CENTER,
+    )
+
+    story = []
+
+    # ========================================================
+    # HEADER
+    # ========================================================
+
+    header_table = Table(
+        [
+            [
+                Paragraph(
+                    "Glenveagh",
+                    ParagraphStyle(
+                        "SiteBoardGlenveagh",
+                        parent=styles["Normal"],
+                        fontName="Helvetica",
+                        fontSize=20,
+                        leading=20,
+                        textColor=colors.white,
+                    ),
+                ),
+                Paragraph(
+                    "SITE PROGRESS BOARD",
+                    ParagraphStyle(
+                        "SiteBoardTitle",
+                        parent=styles["Normal"],
+                        fontName="Helvetica-Bold",
+                        fontSize=16,
+                        leading=17,
+                        alignment=2,
+                        textColor=colors.white,
+                    ),
+                ),
+            ],
+            [
+                Paragraph(
+                    "Home of the new.",
+                    ParagraphStyle(
+                        "SiteBoardTagline",
+                        parent=styles["Normal"],
+                        fontName="Helvetica-Bold",
+                        fontSize=6,
+                        leading=7,
+                        textColor=gold,
+                    ),
+                ),
+                Paragraph(
+                    f"Project / Site: {project}",
+                    ParagraphStyle(
+                        "SiteBoardProject",
+                        parent=styles["Normal"],
+                        fontName="Helvetica",
+                        fontSize=7,
+                        leading=8,
+                        alignment=2,
+                        textColor=colors.white,
+                    ),
+                ),
+            ],
+        ],
+        colWidths=[
+            190 * mm,
+            205 * mm,
+        ],
+    )
+
+    header_table.setStyle(
+        TableStyle(
+            [
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, -1),
+                    navy,
+                ),
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "MIDDLE",
+                ),
+                (
+                    "LEFTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3 * mm,
+                ),
+                (
+                    "RIGHTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3 * mm,
+                ),
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    2,
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    2,
+                ),
+            ]
+        )
+    )
+
+    story.append(
+        header_table
+    )
+
+    gold_line = Table(
+        [[""]],
+        colWidths=[
+            395 * mm
+        ],
+        rowHeights=[
+            1.2 * mm
+        ],
+    )
+
+    gold_line.setStyle(
+        TableStyle(
+            [
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, -1),
+                    gold,
+                ),
+            ]
+        )
+    )
+
+    story.append(
+        gold_line
+    )
+
+    story.append(
+        Spacer(
+            1,
+            3 * mm,
+        )
+    )
+
+    # ========================================================
+    # FILTER BLOCKS FOR PROJECT
+    # ========================================================
+
+    project_blocks = [
+        item
+        for item in blocks
+        if (
+            item.get(
+                "project",
+                ""
+            ).strip()
+            == project.strip()
+        )
+    ]
+
+    if not project_blocks:
+
+        story.append(
+            Paragraph(
+                "No saved blocks found for this project.",
+                styles["Normal"],
+            )
+        )
+
+        doc.build(
+            story
+        )
+
+        buffer.seek(
+            0
+        )
+
+        return buffer.getvalue()
+
+    project_blocks = sorted(
+        project_blocks,
+        key=lambda item: item.get(
+            "block_name",
+            ""
+        ),
+    )
+
+    # ========================================================
+    # ACTIVITY MATRIX
+    # ========================================================
+
+    activity_names = {}
+
+    activity_status_map = {}
+
+    for item in activities:
+
+        activity_order = item.get(
+            "activity_order"
+        )
+
+        if activity_order:
+
+            activity_names[
+                activity_order
+            ] = item.get(
+                "activity_name",
+                ""
+            )
+
+        activity_status_map[
+            (
+                item.get(
+                    "block_key"
+                ),
+                activity_order,
+            )
+        ] = item.get(
+            "status",
+            "Not Started",
+        )
+
+    header_row = [
+        Paragraph(
+            "Activity",
+            header_style,
+        )
+    ]
+
+    for block in project_blocks:
+
+        header_row.append(
+            Paragraph(
+                str(
+                    block.get(
+                        "block_name",
+                        ""
+                    )
+                ),
+                header_style,
+            )
+        )
+
+    matrix_data = [
+        header_row
+    ]
+
+    section_map = {
+        1: "FOUNDATION",
+        6: "BLOCKWORK & DRAINAGE",
+        16: "RADON & INSULATION",
+        20: "FLOOR SLAB",
+    }
+
+    section_rows = []
+
+    status_cells = []
+
+    for activity_order in range(
+        1,
+        22,
+    ):
+
+        if activity_order in section_map:
+
+            section_rows.append(
+                len(
+                    matrix_data
+                )
+            )
+
+            matrix_data.append(
+                [
+                    section_map[
+                        activity_order
+                    ]
+                ]
+                + [
+                    ""
+                    for _ in project_blocks
+                ]
+            )
+
+        row = [
+            Paragraph(
+                (
+                    f"{activity_order:02d}. "
+                    f"{activity_names.get(activity_order, '')}"
+                ),
+                activity_style,
+            )
+        ]
+
+        matrix_row_number = len(
+            matrix_data
+        )
+
+        for block_index, block in enumerate(
+            project_blocks,
+            start=1,
+        ):
+
+            status = (
+                activity_status_map.get(
+                    (
+                        block.get(
+                            "block_key"
+                        ),
+                        activity_order,
+                    ),
+                    "Not Started",
+                )
+            )
+
+            row.append(
+                Paragraph(
+                    status,
+                    status_style,
+                )
+            )
+
+            status_cells.append(
+                (
+                    matrix_row_number,
+                    block_index,
+                    status,
+                )
+            )
+
+        matrix_data.append(
+            row
+        )
+
+    available_width = (
+        395 * mm
+    )
+
+    activity_width = (
+        105 * mm
+    )
+
+    remaining_width = (
+        available_width
+        - activity_width
+    )
+
+    block_width = (
+        remaining_width
+        / len(
+            project_blocks
+        )
+    )
+
+    matrix_table = Table(
+        matrix_data,
+        colWidths=[
+            activity_width
+        ]
+        + [
+            block_width
+            for _ in project_blocks
+        ],
+        repeatRows=1,
+    )
+
+    matrix_commands = [
+        (
+            "BACKGROUND",
+            (0, 0),
+            (-1, 0),
+            navy,
+        ),
+        (
+            "TEXTCOLOR",
+            (0, 0),
+            (-1, 0),
+            colors.white,
+        ),
+        (
+            "FONTNAME",
+            (0, 0),
+            (-1, 0),
+            "Helvetica-Bold",
+        ),
+        (
+            "GRID",
+            (0, 0),
+            (-1, -1),
+            0.3,
+            grid_gray,
+        ),
+        (
+            "VALIGN",
+            (0, 0),
+            (-1, -1),
+            "MIDDLE",
+        ),
+        (
+            "ALIGN",
+            (1, 0),
+            (-1, -1),
+            "CENTER",
+        ),
+        (
+            "TOPPADDING",
+            (0, 0),
+            (-1, -1),
+            3,
+        ),
+        (
+            "BOTTOMPADDING",
+            (0, 0),
+            (-1, -1),
+            3,
+        ),
+        (
+            "LEFTPADDING",
+            (0, 0),
+            (-1, -1),
+            2,
+        ),
+        (
+            "RIGHTPADDING",
+            (0, 0),
+            (-1, -1),
+            2,
+        ),
+    ]
+
+    for section_row in section_rows:
+
+        matrix_commands.extend(
+            [
+                (
+                    "SPAN",
+                    (0, section_row),
+                    (-1, section_row),
+                ),
+                (
+                    "BACKGROUND",
+                    (0, section_row),
+                    (-1, section_row),
+                    navy,
+                ),
+                (
+                    "TEXTCOLOR",
+                    (0, section_row),
+                    (-1, section_row),
+                    colors.white,
+                ),
+                (
+                    "FONTNAME",
+                    (0, section_row),
+                    (-1, section_row),
+                    "Helvetica-Bold",
+                ),
+                (
+                    "ALIGN",
+                    (0, section_row),
+                    (-1, section_row),
+                    "LEFT",
+                ),
+            ]
+        )
+
+    for (
+        row_number,
+        column_number,
+        status,
+    ) in status_cells:
+
+        if status == "Complete":
+
+            status_color = (
+                complete_color
+            )
+
+        elif status == "In Progress":
+
+            status_color = (
+                in_progress_color
+            )
+
+        elif status == "N/A":
+
+            status_color = (
+                na_color
+            )
+
+        else:
+
+            status_color = (
+                not_started_color
+            )
+
+        matrix_commands.append(
+            (
+                "BACKGROUND",
+                (
+                    column_number,
+                    row_number,
+                ),
+                (
+                    column_number,
+                    row_number,
+                ),
+                status_color,
+            )
+        )
+
+    matrix_table.setStyle(
+        TableStyle(
+            matrix_commands
+        )
+    )
+
+    story.append(
+        matrix_table
+    )
+
+    story.append(
+        Spacer(
+            1,
+            3 * mm,
+        )
+    )
+
+    legend_table = Table(
+        [
+            [
+                "Status:",
+                "Complete",
+                "In Progress",
+                "Not Started",
+                "N/A",
+            ]
+        ],
+        colWidths=[
+            25 * mm,
+            35 * mm,
+            35 * mm,
+            35 * mm,
+            25 * mm,
+        ],
+    )
+
+    legend_table.setStyle(
+        TableStyle(
+            [
+                (
+                    "BACKGROUND",
+                    (1, 0),
+                    (1, 0),
+                    complete_color,
+                ),
+                (
+                    "BACKGROUND",
+                    (2, 0),
+                    (2, 0),
+                    in_progress_color,
+                ),
+                (
+                    "BACKGROUND",
+                    (3, 0),
+                    (3, 0),
+                    not_started_color,
+                ),
+                (
+                    "BACKGROUND",
+                    (4, 0),
+                    (4, 0),
+                    na_color,
+                ),
+                (
+                    "FONTNAME",
+                    (0, 0),
+                    (-1, -1),
+                    "Helvetica-Bold",
+                ),
+                (
+                    "FONTSIZE",
+                    (0, 0),
+                    (-1, -1),
+                    6,
+                ),
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.3,
+                    grid_gray,
+                ),
+                (
+                    "ALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "CENTER",
+                ),
+            ]
+        )
+    )
+
+    story.append(
+        legend_table
+    )
+
+    doc.build(
+        story
+    )
+
+    buffer.seek(
+        0
+    )
+
+    return buffer.getvalue()
+
 
 # ============================================================
 # EXCEL GENERATOR
@@ -3529,6 +5758,7 @@ pagina = st.sidebar.radio(
         "Surveys",
         "Inspections",
         "Checklists",
+        "Block Progress",
         "Snag List",
         "As-Built",
         "Levels",
@@ -7136,6 +9366,1304 @@ elif pagina == "Public Lighting":
     )
 
 
+# ============================================================
+# BLOCK PROGRESS
+# ============================================================
+
+elif pagina == "Block Progress":
+
+    st.header(
+        "Block Progress"
+    )
+
+    st.caption(
+        "Track construction progress by block and generate progress reports."
+    )
+
+    st.subheader(
+        "Block Information"
+    )
+
+    # ========================================================
+    # SAVE MESSAGE AFTER RERUN
+    # ========================================================
+
+    if st.session_state.get(
+        "block_progress_save_message"
+    ):
+
+        st.success(
+            st.session_state.pop(
+                "block_progress_save_message"
+            )
+        )
+
+    # ========================================================
+    # NEW BLOCK
+    # ========================================================
+
+    if st.button(
+        "New Block",
+        use_container_width=True,
+    ):
+
+        st.session_state[
+            "block_progress_project"
+        ] = ""
+
+        st.session_state[
+            "block_progress_block"
+        ] = ""
+
+        st.session_state[
+            "block_progress_reset_after_delete"
+        ] = True
+
+        for index in range(
+            1,
+            22,
+        ):
+
+            st.session_state[
+                f"block_progress_status_{index}"
+            ] = "Not Started"
+
+            st.session_state[
+                f"block_progress_started_{index}"
+            ] = ""
+
+            st.session_state[
+                f"block_progress_completed_{index}"
+            ] = ""
+
+            st.session_state[
+                f"block_progress_notes_{index}"
+            ] = ""
+
+        st.rerun()
+
+    # ========================================================
+    # SAVED BLOCKS
+    # ========================================================
+
+    try:
+
+        saved_block_options = (
+            list_block_progress_blocks_from_supabase()
+        )
+
+    except Exception:
+
+        saved_block_options = []
+
+    saved_block_labels = [
+        (
+            f"{item.get('project', '')} | "
+            f"{item.get('block_name', '')}"
+        )
+        for item in saved_block_options
+    ]
+
+    if st.session_state.pop(
+        "block_progress_reset_after_delete",
+        False,
+    ):
+        st.session_state.pop(
+            "block_progress_saved_selector",
+            None,
+        )
+
+    selected_saved_block = st.selectbox(
+        "Saved Blocks",
+        [
+            "Select saved block..."
+        ] + saved_block_labels,
+        key="block_progress_saved_selector",
+    )
+
+    # ========================================================
+    # OPEN SELECTED BLOCK
+    # ========================================================
+
+    if (
+        selected_saved_block
+        != "Select saved block..."
+    ):
+
+        selected_index = (
+            saved_block_labels.index(
+                selected_saved_block
+            )
+        )
+
+        selected_block_record = (
+            saved_block_options[
+                selected_index
+            ]
+        )
+
+        selected_block_key = (
+            selected_block_record.get(
+                "block_key",
+                "",
+            )
+        )
+
+        if st.button(
+            "Open Selected Block",
+            use_container_width=True,
+        ):
+
+            try:
+
+                saved_block_progress = (
+                    load_block_progress_from_supabase(
+                        selected_block_key
+                    )
+                )
+
+                if not saved_block_progress:
+
+                    st.warning(
+                        "Saved Block Progress not found."
+                    )
+
+                else:
+
+                    st.session_state[
+                        "block_progress_project"
+                    ] = (
+                        saved_block_progress[
+                            "block"
+                        ].get(
+                            "project",
+                            "",
+                        )
+                    )
+
+                    st.session_state[
+                        "block_progress_block"
+                    ] = (
+                        saved_block_progress[
+                            "block"
+                        ].get(
+                            "block_name",
+                            "",
+                        )
+                    )
+
+                    for activity_row in (
+                        saved_block_progress[
+                            "activities"
+                        ]
+                    ):
+
+                        index = activity_row[
+                            "activity_order"
+                        ]
+
+                        st.session_state[
+                            f"block_progress_status_{index}"
+                        ] = (
+                            activity_row.get(
+                                "status"
+                            )
+                            or "Not Started"
+                        )
+
+                        st.session_state[
+                            f"block_progress_started_{index}"
+                        ] = (
+                            activity_row.get(
+                                "started_date"
+                            )
+                            or ""
+                        )
+
+                        st.session_state[
+                            f"block_progress_completed_{index}"
+                        ] = (
+                            activity_row.get(
+                                "completed_date"
+                            )
+                            or ""
+                        )
+
+                        st.session_state[
+                            f"block_progress_notes_{index}"
+                        ] = (
+                            activity_row.get(
+                                "notes"
+                            )
+                            or ""
+                        )
+
+                    st.rerun()
+
+            except Exception as exc:
+
+                st.error(
+                    (
+                        "Could not open selected block. "
+                        f"Error: {exc}"
+                    )
+                )
+
+        if st.button(
+            "Delete Selected Block",
+            use_container_width=True,
+        ):
+
+            try:
+
+                supabase = get_supabase_client()
+
+                (
+                    supabase
+                    .table(
+                        "block_progress_blocks"
+                    )
+                    .delete()
+                    .eq(
+                        "block_key",
+                        selected_block_key,
+                    )
+                    .execute()
+                )
+
+                st.session_state[
+                    "block_progress_project"
+                ] = ""
+
+                st.session_state[
+                    "block_progress_block"
+                ] = ""
+
+                st.session_state[
+                    "block_progress_reset_after_delete"
+                ] = True
+
+                for index in range(
+                    1,
+                    22,
+                ):
+
+                    st.session_state[
+                        f"block_progress_status_{index}"
+                    ] = "Not Started"
+
+                    st.session_state[
+                        f"block_progress_started_{index}"
+                    ] = ""
+
+                    st.session_state[
+                        f"block_progress_completed_{index}"
+                    ] = ""
+
+                    st.session_state[
+                        f"block_progress_notes_{index}"
+                    ] = ""
+
+                st.session_state[
+                    "block_progress_save_message"
+                ] = (
+                    "Selected Block Progress deleted."
+                )
+
+                st.rerun()
+
+            except Exception as exc:
+
+                st.error(
+                    (
+                        "Could not delete selected block. "
+                        f"Error: {exc}"
+                    )
+                )
+
+    st.divider()
+
+    # ========================================================
+    # BLOCK INFORMATION
+    # ========================================================
+
+    bp1, bp2 = st.columns(2)
+
+    with bp1:
+
+        block_project = st.text_input(
+            "Project / Site",
+            placeholder="Ex.: M1.02",
+            key="block_progress_project",
+        )
+
+    with bp2:
+
+        block_name = st.text_input(
+            "Block",
+            placeholder="Ex.: BT05",
+            key="block_progress_block",
+        )
+
+    block_progress_key = (
+        f"{block_project.strip()}__"
+        f"{block_name.strip()}"
+    ).lower()
+
+    st.divider()
+
+    # ========================================================
+    # PROGRESS SUMMARY
+    # ========================================================
+
+    block_progress_statuses = []
+
+    for index in range(
+        1,
+        22,
+    ):
+
+        block_progress_statuses.append(
+            st.session_state.get(
+                f"block_progress_status_{index}",
+                "Not Started",
+            )
+        )
+
+    total_services = len(
+        block_progress_statuses
+    )
+
+    total_complete = (
+        block_progress_statuses.count(
+            "Complete"
+        )
+    )
+
+    total_in_progress = (
+        block_progress_statuses.count(
+            "In Progress"
+        )
+    )
+
+    total_not_started = (
+        block_progress_statuses.count(
+            "Not Started"
+        )
+    )
+
+    total_na = (
+        block_progress_statuses.count(
+            "N/A"
+        )
+    )
+
+    applicable_services = (
+        total_services
+        - total_na
+    )
+
+    if applicable_services > 0:
+
+        overall_progress = round(
+            (
+                total_complete
+                / applicable_services
+            )
+            * 100
+        )
+
+    else:
+
+        overall_progress = 0
+
+    m1, m2, m3, m4, m5 = st.columns(
+        5
+    )
+
+    with m1:
+
+        st.metric(
+            "Total Services",
+            total_services,
+        )
+
+    with m2:
+
+        st.metric(
+            "Complete",
+            total_complete,
+        )
+
+    with m3:
+
+        st.metric(
+            "In Progress",
+            total_in_progress,
+        )
+
+    with m4:
+
+        st.metric(
+            "Not Started",
+            total_not_started,
+        )
+
+    with m5:
+
+        st.metric(
+            "Overall Progress",
+            f"{overall_progress}%",
+        )
+
+    st.divider()
+
+    st.subheader(
+        "Progress Activities"
+    )
+
+    block_activities = [
+        "Setting out excavation position & level",
+        "Bottom of foundation survey",
+        "AKM inspection",
+        "Foundation concrete pour",
+        "Top of foundation survey",
+        "Setting out blockwork",
+        "Setting out drainage",
+        "Blockwork execution",
+        "Blockwork openings inspection",
+        "Setting out top of block",
+        "Top of block execution",
+        "Top of block dimensions & levels survey",
+        "Drainage execution",
+        "Backfill",
+        "Pop-ups survey",
+        "Radon installation",
+        "Radon inspection",
+        "Insulation installation",
+        "Insulation inspection",
+        "Floor slab concrete pour",
+        "Floor slab survey",
+    ]
+
+    st.markdown(
+        "### Foundation"
+    )
+
+    foundation_activities = block_activities[:5]
+
+    for index, activity in enumerate(
+        foundation_activities,
+        start=1,
+    ):
+
+        activity_col, status_col, started_col, completed_col, notes_col = st.columns(
+            [3, 1, 1, 1, 2]
+        )
+
+        with activity_col:
+
+            st.write(
+                f"{index:02d}. {activity}"
+            )
+
+        status_key = (
+            f"block_progress_status_"
+            f"{index}"
+        )
+
+        started_key = (
+            f"block_progress_started_"
+            f"{index}"
+        )
+
+        completed_key = (
+            f"block_progress_completed_"
+            f"{index}"
+        )
+
+        with status_col:
+
+            activity_status = st.selectbox(
+                "Status",
+                [
+                    "Not Started",
+                    "In Progress",
+                    "Complete",
+                    "N/A",
+                ],
+                key=status_key,
+                label_visibility="collapsed",
+            )
+        today_text = date.today().strftime(
+            "%d/%m/%Y"
+        )
+
+        if activity_status == "Not Started":
+
+            st.session_state[
+                started_key
+            ] = ""
+
+            st.session_state[
+                completed_key
+            ] = ""
+
+        elif activity_status == "In Progress":
+
+            if not st.session_state.get(
+                started_key
+            ):
+                st.session_state[
+                    started_key
+                ] = today_text
+
+            st.session_state[
+                completed_key
+            ] = ""
+
+        elif activity_status == "Complete":
+
+            if not st.session_state.get(
+                started_key
+            ):
+                st.session_state[
+                    started_key
+                ] = today_text
+
+            if not st.session_state.get(
+                completed_key
+            ):
+                st.session_state[
+                    completed_key
+                ] = today_text
+
+        elif activity_status == "N/A":
+
+            st.session_state[
+                started_key
+            ] = ""
+
+            st.session_state[
+                completed_key
+            ] = ""
+
+            if not st.session_state.get(
+                completed_key
+            ):
+                st.session_state[
+                    completed_key
+                ] = date.today().strftime(
+                    "%d/%m/%Y"
+                )
+
+        with started_col:
+
+            st.text_input(
+                "Started",
+                value="",
+                key=started_key,
+                placeholder="Started",
+                label_visibility="collapsed",
+            )
+
+        with completed_col:
+
+            st.text_input(
+                "Completed",
+                value="",
+                key=(
+                    f"block_progress_completed_"
+                    f"{index}"
+                ),
+                placeholder="Completed",
+                label_visibility="collapsed",
+            )
+
+        with notes_col:
+
+            st.text_input(
+                "Notes",
+                value="",
+                key=(
+                    f"block_progress_notes_"
+                    f"{index}"
+                ),
+                placeholder="Notes",
+                label_visibility="collapsed",
+            )
+
+    st.markdown(
+        "### Blockwork & Drainage"
+    )
+
+    blockwork_drainage_activities = block_activities[5:15]
+
+    for index, activity in enumerate(
+        blockwork_drainage_activities,
+        start=6,
+    ):
+
+        activity_col, status_col, started_col, completed_col, notes_col = st.columns(
+            [3, 1, 1, 1, 2]
+        )
+
+        with activity_col:
+
+            st.write(
+                f"{index:02d}. {activity}"
+            )
+
+        status_key = (
+            f"block_progress_status_"
+            f"{index}"
+        )
+
+        started_key = (
+            f"block_progress_started_"
+            f"{index}"
+        )
+
+        completed_key = (
+            f"block_progress_completed_"
+            f"{index}"
+        )
+
+        with status_col:
+
+            activity_status = st.selectbox(
+                "Status",
+                [
+                    "Not Started",
+                    "In Progress",
+                    "Complete",
+                    "N/A",
+                ],
+                key=status_key,
+                label_visibility="collapsed",
+            )
+
+        today_text = date.today().strftime(
+            "%d/%m/%Y"
+        )
+
+        if activity_status == "Not Started":
+
+            st.session_state[
+                started_key
+            ] = ""
+
+            st.session_state[
+                completed_key
+            ] = ""
+
+        elif activity_status == "In Progress":
+
+            if not st.session_state.get(
+                started_key
+            ):
+                st.session_state[
+                    started_key
+                ] = today_text
+
+            st.session_state[
+                completed_key
+            ] = ""
+
+        elif activity_status == "Complete":
+
+            if not st.session_state.get(
+                started_key
+            ):
+                st.session_state[
+                    started_key
+                ] = today_text
+
+            if not st.session_state.get(
+                completed_key
+            ):
+                st.session_state[
+                    completed_key
+                ] = today_text
+
+        elif activity_status == "N/A":
+
+            st.session_state[
+                started_key
+            ] = ""
+
+            st.session_state[
+                completed_key
+            ] = ""
+
+        with started_col:
+
+            st.text_input(
+                "Started",
+                value="",
+                key=started_key,
+                placeholder="Started",
+                label_visibility="collapsed",
+            )
+
+        with completed_col:
+
+            st.text_input(
+                "Completed",
+                value="",
+                key=completed_key,
+                placeholder="Completed",
+                label_visibility="collapsed",
+            )
+
+        with notes_col:
+
+            st.text_input(
+                "Notes",
+                value="",
+                key=(
+                    f"block_progress_notes_"
+                    f"{index}"
+                ),
+                placeholder="Notes",
+                label_visibility="collapsed",
+            )
+
+    st.markdown(
+        "### Radon & Insulation"
+    )
+
+    radon_insulation_activities = block_activities[15:19]
+
+    for index, activity in enumerate(
+        radon_insulation_activities,
+        start=16,
+    ):
+
+        activity_col, status_col, started_col, completed_col, notes_col = st.columns(
+            [3, 1, 1, 1, 2]
+        )
+
+        with activity_col:
+
+            st.write(
+                f"{index:02d}. {activity}"
+            )
+
+        status_key = (
+            f"block_progress_status_"
+            f"{index}"
+        )
+
+        started_key = (
+            f"block_progress_started_"
+            f"{index}"
+        )
+
+        completed_key = (
+            f"block_progress_completed_"
+            f"{index}"
+        )
+
+        with status_col:
+
+            activity_status = st.selectbox(
+                "Status",
+                [
+                    "Not Started",
+                    "In Progress",
+                    "Complete",
+                    "N/A",
+                ],
+                key=status_key,
+                label_visibility="collapsed",
+            )
+
+        today_text = date.today().strftime(
+            "%d/%m/%Y"
+        )
+
+        if activity_status == "Not Started":
+
+            st.session_state[
+                started_key
+            ] = ""
+
+            st.session_state[
+                completed_key
+            ] = ""
+
+        elif activity_status == "In Progress":
+
+            if not st.session_state.get(
+                started_key
+            ):
+                st.session_state[
+                    started_key
+                ] = today_text
+
+            st.session_state[
+                completed_key
+            ] = ""
+
+        elif activity_status == "Complete":
+
+            if not st.session_state.get(
+                started_key
+            ):
+                st.session_state[
+                    started_key
+                ] = today_text
+
+            if not st.session_state.get(
+                completed_key
+            ):
+                st.session_state[
+                    completed_key
+                ] = today_text
+
+        elif activity_status == "N/A":
+
+            st.session_state[
+                started_key
+            ] = ""
+
+            st.session_state[
+                completed_key
+            ] = ""
+
+        with started_col:
+
+            st.text_input(
+                "Started",
+                value="",
+                key=started_key,
+                placeholder="Started",
+                label_visibility="collapsed",
+            )
+
+        with completed_col:
+
+            st.text_input(
+                "Completed",
+                value="",
+                key=completed_key,
+                placeholder="Completed",
+                label_visibility="collapsed",
+            )
+
+        with notes_col:
+
+            st.text_input(
+                "Notes",
+                value="",
+                key=(
+                    f"block_progress_notes_"
+                    f"{index}"
+                ),
+                placeholder="Notes",
+                label_visibility="collapsed",
+            )
+
+
+    st.markdown(
+        "### Floor Slab"
+    )
+
+    floor_slab_activities = block_activities[19:21]
+
+    for index, activity in enumerate(
+        floor_slab_activities,
+        start=20,
+    ):
+        activity_col, status_col, started_col, completed_col, notes_col = st.columns(
+            [3, 1, 1, 1, 2]
+        )
+
+        with activity_col:
+
+            st.write(
+                f"{index:02d}. {activity}"
+            )
+
+        status_key = (
+            f"block_progress_status_"
+            f"{index}"
+        )
+
+        started_key = (
+            f"block_progress_started_"
+            f"{index}"
+        )
+
+        completed_key = (
+            f"block_progress_completed_"
+            f"{index}"
+        )
+
+        with status_col:
+
+            activity_status = st.selectbox(
+                "Status",
+                [
+                    "Not Started",
+                    "In Progress",
+                    "Complete",
+                    "N/A",
+                ],
+                key=status_key,
+                label_visibility="collapsed",
+            )
+
+        today_text = date.today().strftime(
+            "%d/%m/%Y"
+        )
+
+        if activity_status == "Not Started":
+
+            st.session_state[
+                started_key
+            ] = ""
+
+            st.session_state[
+                completed_key
+            ] = ""
+
+        elif activity_status == "In Progress":
+
+            if not st.session_state.get(
+                started_key
+            ):
+                st.session_state[
+                    started_key
+                ] = today_text
+
+            st.session_state[
+                completed_key
+            ] = ""
+
+        elif activity_status == "Complete":
+
+            if not st.session_state.get(
+                started_key
+            ):
+                st.session_state[
+                    started_key
+                ] = today_text
+
+            if not st.session_state.get(
+                completed_key
+            ):
+                st.session_state[
+                    completed_key
+                ] = today_text
+
+        elif activity_status == "N/A":
+
+            st.session_state[
+                started_key
+            ] = ""
+
+            st.session_state[
+                completed_key
+            ] = ""
+
+        with started_col:
+
+            st.text_input(
+                "Started",
+                value="",
+                key=started_key,
+                placeholder="Started",
+                label_visibility="collapsed",
+            )
+
+        with completed_col:
+
+            st.text_input(
+                "Completed",
+                value="",
+                key=completed_key,
+                placeholder="Completed",
+                label_visibility="collapsed",
+            )
+
+        with notes_col:
+
+            st.text_input(
+                "Notes",
+                value="",
+                key=(
+                    f"block_progress_notes_"
+                    f"{index}"
+                ),
+                placeholder="Notes",
+                label_visibility="collapsed",
+            )
+
+
+    block_progress_records = []
+
+    for index, activity in enumerate(
+        block_activities,
+        start=1,
+    ):
+        block_progress_records.append(
+            {
+                "activity_order": index,
+                "activity": activity,
+                "status": st.session_state.get(
+                    f"block_progress_status_{index}",
+                    "Not Started",
+                ),
+                "started": st.session_state.get(
+                    f"block_progress_started_{index}",
+                    "",
+                ),
+                "completed": st.session_state.get(
+                    f"block_progress_completed_{index}",
+                    "",
+                ),
+                "notes": st.session_state.get(
+                    f"block_progress_notes_{index}",
+                    "",
+                ),
+            }
+        )
+
+    st.divider()
+
+    save_block_progress = st.button(
+        "Save Block Progress",
+        use_container_width=True,
+    )
+
+    if save_block_progress:
+
+        if not block_project.strip():
+
+            st.error(
+                "Please enter Project / Site."
+            )
+
+        elif not block_name.strip():
+
+            st.error(
+                "Please enter Block."
+            )
+
+        else:
+
+            try:
+
+                supabase = get_supabase_client()
+
+                current_timestamp = (
+                    datetime.now(
+                        timezone.utc
+                    ).isoformat()
+                )
+
+                # --------------------------------------------
+                # SAVE / UPDATE BLOCK
+                # --------------------------------------------
+
+                supabase.table(
+                    "block_progress_blocks"
+                ).upsert(
+                    {
+                        "block_key": block_progress_key,
+                        "project": block_project.strip(),
+                        "block_name": block_name.strip(),
+                        "updated_at": current_timestamp,
+                    },
+                    on_conflict="block_key",
+                ).execute()
+
+                # --------------------------------------------
+                # SAVE / UPDATE THE 21 ACTIVITIES
+                # --------------------------------------------
+
+                activity_rows = []
+
+                for record in block_progress_records:
+
+                    activity_rows.append(
+                        {
+                            "block_key": block_progress_key,
+                            "activity_order": record[
+                                "activity_order"
+                            ],
+                            "activity_name": record[
+                                "activity"
+                            ],
+                            "status": record[
+                                "status"
+                            ],
+                            "started_date": record[
+                                "started"
+                            ] or None,
+                            "completed_date": record[
+                                "completed"
+                            ] or None,
+                            "notes": record[
+                                "notes"
+                            ],
+                            "updated_at": current_timestamp,
+                        }
+                    )
+
+                supabase.table(
+                    "block_progress_activities"
+                ).upsert(
+                    activity_rows,
+                    on_conflict=(
+                        "block_key,"
+                        "activity_order"
+                    ),
+                ).execute()
+
+                st.session_state[
+                    "block_progress_save_message"
+                ] = (
+                    "Block Progress saved successfully: "
+                    f"{block_project.strip()} | "
+                    f"{block_name.strip()}"
+                )
+
+                st.rerun()
+
+            except Exception as exc:
+
+                st.error(
+                    (
+                        "Could not save Block Progress. "
+                        f"Error: {exc}"
+                    )
+                )
+
+    st.divider()
+
+    st.subheader(
+        "Reports"
+    )
+
+    report_col1, report_col2 = st.columns(
+        2
+    )
+
+    with report_col1:
+
+        generate_block_report = st.button(
+            "Generate Block Progress Report",
+            use_container_width=True,
+        )
+
+    if generate_block_report:
+
+        if not block_project.strip():
+
+            st.error(
+                "Please enter Project / Site."
+            )
+
+        elif not block_name.strip():
+
+            st.error(
+                "Please enter Block."
+            )
+
+        else:
+
+            try:
+
+                block_report_pdf = (
+                    build_block_progress_pdf(
+                        block_project.strip(),
+                        block_name.strip(),
+                        block_progress_records,
+                    )
+                )
+
+                st.download_button(
+                    "Download Block Progress Report",
+                    data=block_report_pdf,
+                    file_name=(
+                        f"{block_name.strip()}_"
+                        "Block_Progress_Report.pdf"
+                    ),
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
+
+            except Exception as exc:
+
+                st.error(
+                    (
+                        "Could not generate Block Progress Report. "
+                        f"Error: {exc}"
+                    )
+                )
+
+    with report_col2:
+
+        generate_site_board = st.button(
+            "Generate Site Progress Board",
+            use_container_width=True,
+        )
+
+    if generate_site_board:
+
+        if not block_project.strip():
+
+            st.error(
+                "Please enter Project / Site."
+            )
+
+        else:
+
+            try:
+
+                site_board_data = (
+                    load_site_progress_board_data()
+                )
+
+                site_board_pdf = (
+                    build_site_progress_board_pdf(
+                        block_project.strip(),
+                        site_board_data[
+                            "blocks"
+                        ],
+                        site_board_data[
+                            "activities"
+                        ],
+                    )
+                )
+
+                st.download_button(
+                    "Download Site Progress Board",
+                    data=site_board_pdf,
+                    file_name=(
+                        f"{block_project.strip()}_"
+                        "Site_Progress_Board.pdf"
+                    ),
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
+
+            except Exception as exc:
+
+                st.error(
+                    (
+                        "Could not generate Site Progress Board. "
+                        f"Error: {exc}"
+                    )
+                )
+
+
+   
+
+    
 # ============================================================
 # DAILY REPORT
 # ============================================================
