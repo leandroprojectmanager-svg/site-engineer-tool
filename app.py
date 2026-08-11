@@ -7278,7 +7278,7 @@ elif pagina == "Daily Report":
         # ========================================================
 
         header_cols = st.columns(
-            [2.2, 1.2, 1.1, 0.8, 0.8, 0.9, 1.2, 0.6]
+            [2.2, 1.2, 1.1, 0.8, 0.8, 0.9, 0.6]
         )
 
         headers = [
@@ -7288,7 +7288,6 @@ elif pagina == "Daily Report":
             "Manpower",
             "Plant",
             "Activities",
-            "Last Updated",
             "Delete",
         ]
 
@@ -7310,7 +7309,7 @@ elif pagina == "Daily Report":
             )
 
             row_cols = st.columns(
-                [2.2, 1.2, 1.1, 0.8, 0.8, 0.9, 1.2, 0.6]
+                [2.2, 1.2, 1.1, 0.8, 0.8, 0.9, 0.6]
             )
 
             row_cols[0].write(
@@ -7357,16 +7356,8 @@ elif pagina == "Daily Report":
                 )
             )
 
-            row_cols[6].write(
-                format_date_for_display(
-                    record.get(
-                        "Last Updated",
-                        "",
-                    )
-                )
-            )
 
-            if row_cols[7].button(
+            if row_cols[6].button(
                 "🗑️",
                 key=(
                     f"table_delete_daily_"
