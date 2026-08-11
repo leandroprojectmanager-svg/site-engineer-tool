@@ -7180,11 +7180,15 @@ elif pagina == "Daily Report":
     )
 
 
-    existing_daily_keys = list(
-        st.session_state
-        .daily_reports
-        .keys()
-    )
+    existing_daily_keys = sorted(
+    st.session_state.daily_reports.keys(),
+    key=lambda key: (
+        st.session_state.daily_reports[key].get(
+            "Date",
+            date.min,
+        )
+    ),
+)
 
 
     # ========================================================
@@ -7274,32 +7278,8 @@ elif pagina == "Daily Report":
         )
 
                 # ========================================================
-        # EXISTING DAILY REPORTS TABLE WITH DELETE BUTTON
+        # EXISTING DAILY REPORTS - MOBILE FRIENDLY CARDS
         # ========================================================
-
-        header_cols = st.columns(
-            [2.2, 1.2, 1.1, 0.8, 0.8, 0.9, 0.6]
-        )
-
-        headers = [
-            "Project",
-            "Date",
-            "Status",
-            "Manpower",
-            "Plant",
-            "Activities",
-            "Delete",
-        ]
-
-        for col, header in zip(
-            header_cols,
-            headers,
-        ):
-            col.markdown(
-                f"**{header}**"
-            )
-
-        st.divider()
 
         for key in existing_daily_keys:
 
@@ -7308,18 +7288,12 @@ elif pagina == "Daily Report":
                 .daily_reports[key]
             )
 
-            row_cols = st.columns(
-                [2.2, 1.2, 1.1, 0.8, 0.8, 0.9, 0.6]
+            project_name = record.get(
+                "Project",
+                "",
             )
 
-            row_cols[0].write(
-                record.get(
-                    "Project",
-                    "",
-                )
-            )
-
-            row_cols[1].write(
+            report_date_display = (
                 format_date_for_display(
                     record.get(
                         "Date",
@@ -7328,202 +7302,229 @@ elif pagina == "Daily Report":
                 )
             )
 
-            row_cols[2].write(
-                record.get(
-                    "Status",
-                    "Draft",
-                )
+            report_status = record.get(
+                "Status",
+                "Draft",
             )
 
-            row_cols[3].write(
+            report_manpower = (
                 calculate_total_manpower(
                     key
                 )
             )
 
-            row_cols[4].write(
+            report_plant = (
                 calculate_total_equipment(
                     key
                 )
             )
 
-            row_cols[5].write(
-                len(
-                    daily_items_for_key(
-                        st.session_state.daily_activities,
-                        key,
-                    )
+            report_activities = len(
+                daily_items_for_key(
+                    st.session_state.daily_activities,
+                    key,
                 )
             )
 
+            with st.container():
 
-            if row_cols[6].button(
-                "🗑️",
-                key=(
-                    f"table_delete_daily_"
-                    f"{widget_suffix(key)}"
-                ),
-                help="Delete Daily Report",
-            ):
-                st.session_state[
-                    "pending_delete_daily"
-                ] = key
-
-            if (
-                st.session_state.get(
-                    "pending_delete_daily"
-                )
-                == key
-            ):
-
-                st.warning(
-                    "⚠️ Permanently delete "
-                    f"{record.get('Project', '')} | "
-                    f"{format_date_for_display(record.get('Date', ''))}?"
+                st.markdown(
+                    f"### {project_name} — {report_date_display}"
                 )
 
-                confirm_col, cancel_col = (
-                    st.columns(2)
+                st.markdown(
+                    (
+                        f"**{report_status}**  ·  "
+                        f"👷 {report_manpower}  ·  "
+                        f"🚜 {report_plant}  ·  "
+                        f"📝 {report_activities} activities"
+                    )
                 )
 
-                if confirm_col.button(
-                    "✅ Yes, Delete Permanently",
+                if st.button(
+                    "🗑️ Delete",
                     key=(
-                        f"confirm_table_delete_"
+                        f"card_delete_daily_"
                         f"{widget_suffix(key)}"
                     ),
-                    type="primary",
                 ):
 
-                    try:
+                    st.session_state[
+                        "pending_delete_daily"
+                    ] = key
 
-                        supabase = (
-                            get_supabase_client()
-                        )
+                if (
+                    st.session_state.get(
+                        "pending_delete_daily"
+                    )
+                    == key
+                ):
 
-                        photo_response = (
-                            supabase
-                            .table("daily_photos")
-                            .select("storage_path")
-                            .eq(
-                                "report_key",
-                                key,
-                            )
-                            .execute()
-                        )
-
-                        storage_paths = [
-                            row.get(
-                                "storage_path"
-                            )
-                            for row
-                            in (
-                                photo_response.data
-                                or []
-                            )
-                            if row.get(
-                                "storage_path"
-                            )
-                        ]
-
-                        if storage_paths:
-
-                            try:
-
-                                (
-                                    supabase.storage
-                                    .from_(
-                                        SUPABASE_PHOTO_BUCKET
-                                    )
-                                    .remove(
-                                        storage_paths
-                                    )
-                                )
-
-                            except Exception:
-
-                                pass
-
+                    st.warning(
                         (
-                            supabase
-                            .table(
-                                "daily_reports"
-                            )
-                            .delete()
-                            .eq(
-                                "report_key",
-                                key,
-                            )
-                            .execute()
+                            "⚠️ Permanently delete "
+                            f"{project_name} | "
+                            f"{report_date_display}?"
                         )
+                    )
 
-                        st.session_state.daily_reports.pop(
-                            key,
-                            None,
+                    confirm_delete = (
+                        st.checkbox(
+                            "I confirm permanent deletion.",
+                            key=(
+                                f"confirm_card_check_"
+                                f"{widget_suffix(key)}"
+                            ),
                         )
+                    )
 
-                        daily_collections = [
-                            "daily_manpower",
-                            "daily_equipment",
-                            "daily_activities",
-                            "daily_deliveries",
-                            "daily_inspections",
-                            "daily_issues",
-                            "daily_photos",
-                        ]
+                    if st.button(
+                        "✅ Delete Permanently",
+                        disabled=(
+                            not confirm_delete
+                        ),
+                        type="primary",
+                        key=(
+                            f"confirm_card_delete_"
+                            f"{widget_suffix(key)}"
+                        ),
+                    ):
 
-                        for collection_name in (
-                            daily_collections
-                        ):
+                        try:
 
-                            st.session_state[
-                                collection_name
-                            ] = [
-                                item
-                                for item
-                                in st.session_state[
-                                    collection_name
-                                ]
-                                if item.get(
-                                    "Daily Report Key"
+                            supabase = (
+                                get_supabase_client()
+                            )
+
+                            photo_response = (
+                                supabase
+                                .table(
+                                    "daily_photos"
                                 )
-                                != key
+                                .select(
+                                    "storage_path"
+                                )
+                                .eq(
+                                    "report_key",
+                                    key,
+                                )
+                                .execute()
+                            )
+
+                            storage_paths = [
+                                row.get(
+                                    "storage_path"
+                                )
+                                for row
+                                in (
+                                    photo_response.data
+                                    or []
+                                )
+                                if row.get(
+                                    "storage_path"
+                                )
                             ]
+
+                            if storage_paths:
+
+                                try:
+
+                                    (
+                                        supabase.storage
+                                        .from_(
+                                            SUPABASE_PHOTO_BUCKET
+                                        )
+                                        .remove(
+                                            storage_paths
+                                        )
+                                    )
+
+                                except Exception:
+
+                                    pass
+
+                            (
+                                supabase
+                                .table(
+                                    "daily_reports"
+                                )
+                                .delete()
+                                .eq(
+                                    "report_key",
+                                    key,
+                                )
+                                .execute()
+                            )
+
+                            st.session_state.daily_reports.pop(
+                                key,
+                                None,
+                            )
+
+                            daily_collections = [
+                                "daily_manpower",
+                                "daily_equipment",
+                                "daily_activities",
+                                "daily_deliveries",
+                                "daily_inspections",
+                                "daily_issues",
+                                "daily_photos",
+                            ]
+
+                            for collection_name in (
+                                daily_collections
+                            ):
+
+                                st.session_state[
+                                    collection_name
+                                ] = [
+                                    item
+                                    for item
+                                    in st.session_state[
+                                        collection_name
+                                    ]
+                                    if item.get(
+                                        "Daily Report Key"
+                                    )
+                                    != key
+                                ]
+
+                            st.session_state.pop(
+                                "pending_delete_daily",
+                                None,
+                            )
+
+                            st.success(
+                                "Daily Report permanently deleted."
+                            )
+
+                            st.rerun()
+
+                        except Exception as exc:
+
+                            st.error(
+                                (
+                                    "Could not delete the Daily Report. "
+                                    f"Error: {exc}"
+                                )
+                            )
+
+                    if st.button(
+                        "Cancel",
+                        key=(
+                            f"cancel_card_delete_"
+                            f"{widget_suffix(key)}"
+                        ),
+                    ):
 
                         st.session_state.pop(
                             "pending_delete_daily",
                             None,
                         )
 
-                        st.success(
-                            "Daily Report permanently deleted."
-                        )
-
                         st.rerun()
 
-                    except Exception as exc:
 
-                        st.error(
-                            "Could not delete the Daily Report. "
-                            f"Error: {exc}"
-                        )
-
-                if cancel_col.button(
-                    "Cancel",
-                    key=(
-                        f"cancel_table_delete_"
-                        f"{widget_suffix(key)}"
-                    ),
-                ):
-
-                    st.session_state.pop(
-                        "pending_delete_daily",
-                        None,
-                    )
-
-                    st.rerun()
-
-            st.divider()
 
 
         selected_daily_key = (
