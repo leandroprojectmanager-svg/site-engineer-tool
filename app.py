@@ -7296,6 +7296,104 @@ elif pagina == "Daily Report":
             )
         )
 
+        st.divider()
+
+        st.warning(
+            "⚠️ Delete is permanent. "
+            "The Daily Report and all related records will be removed."
+        )
+
+        confirm_delete_daily = st.checkbox(
+            "I confirm that I want to permanently delete this Daily Report.",
+            key=f"confirm_delete_daily_{widget_suffix(selected_daily_key)}",
+        )
+
+        if st.button(
+            "🗑️ Delete Daily Report",
+            type="primary",
+            disabled=not confirm_delete_daily,
+            key=f"delete_daily_report_{widget_suffix(selected_daily_key)}",
+        ):
+            try:
+                supabase = get_supabase_client()
+
+                # ------------------------------------------------
+                # DELETE STORED PHOTOS
+                # ------------------------------------------------
+                photo_response = (
+                    supabase
+                    .table("daily_photos")
+                    .select("storage_path")
+                    .eq("report_key", selected_daily_key)
+                    .execute()
+                )
+
+                storage_paths = [
+                    row.get("storage_path")
+                    for row in (photo_response.data or [])
+                    if row.get("storage_path")
+                ]
+
+                if storage_paths:
+                    try:
+                        (
+                            supabase.storage
+                            .from_(SUPABASE_PHOTO_BUCKET)
+                            .remove(storage_paths)
+                        )
+                    except Exception:
+                        pass
+
+                # ------------------------------------------------
+                # DELETE REPORT FROM SUPABASE
+                # Child database records are removed by cascade.
+                # ------------------------------------------------
+                (
+                    supabase
+                    .table("daily_reports")
+                    .delete()
+                    .eq("report_key", selected_daily_key)
+                    .execute()
+                )
+
+                # ------------------------------------------------
+                # REMOVE FROM CURRENT STREAMLIT SESSION
+                # ------------------------------------------------
+                st.session_state.daily_reports.pop(
+                    selected_daily_key,
+                    None,
+                )
+
+                daily_collections = [
+                    "daily_manpower",
+                    "daily_equipment",
+                    "daily_activities",
+                    "daily_deliveries",
+                    "daily_inspections",
+                    "daily_issues",
+                    "daily_photos",
+                ]
+
+                for collection_name in daily_collections:
+                    st.session_state[collection_name] = [
+                        item
+                        for item in st.session_state[collection_name]
+                        if item.get("Daily Report Key")
+                        != selected_daily_key
+                    ]
+
+                st.success(
+                    "Daily Report permanently deleted."
+                )
+
+                st.rerun()
+
+            except Exception as exc:
+                st.error(
+                    "Could not delete the Daily Report. "
+                    f"Error: {exc}"
+                )
+
 
         daily_saved_record = (
             st.session_state
